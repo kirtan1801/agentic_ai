@@ -18,6 +18,7 @@ dependencies = [
     "pinecone>=6.0.0,<8.0.0",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
+    "pypdf>=6.20.0",
     "python-dotenv>=1.2.4",
     "python-multipart>=0.0.32",
     "uvicorn>=0.54.0",

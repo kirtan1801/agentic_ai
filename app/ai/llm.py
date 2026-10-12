@@ -1,3 +1,4 @@
+from langchain_core.output_parsers import StrOutputParser
 from langchain.chat_models import init_chat_model
 
 from app.config import settings
@@ -16,3 +17,7 @@ router_llm = init_chat_model(
     api_key=settings.llm_api_key,
     max_tokens=300,
 )
+
+# Plain-text answers tagged "answer" so the stream endpoint forwards only these tokens.
+# Plain text (not JSON) also means hitting max_tokens truncates instead of failing to parse.
+answer_llm = llm.with_config(tags=["answer"]) | StrOutputParser()

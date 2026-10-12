@@ -88,7 +88,8 @@ h1 { font-size: 1.3rem; margin: 0; }
 .msg.error { align-self: flex-start; background: var(--error); color: var(--error-text); border-color: transparent; }
 .msg.thinking { color: var(--muted); font-style: italic; }
 .tag { display: block; font-size: 0.7rem; color: var(--muted); margin-bottom: 2px; }
-.sources { margin-top: 6px !important; font-size: 0.8rem; color: var(--muted); }
+.sources { margin: 6px 0 0; padding-left: 22px; font-size: 0.8rem; color: var(--muted); }
+.sources li::marker { content: "[" counter(list-item) "] "; }
 
 .composer { display: flex; gap: 8px; }
 .composer textarea {
@@ -124,3 +125,37 @@ h1 { font-size: 1.3rem; margin: 0; }
   cursor: pointer;
 }
 .new-chat:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.status-line { font-style: italic; }
+
+.docs {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 0.9rem;
+}
+.docs summary { cursor: pointer; }
+.docs ul { list-style: none; margin: 8px 0 4px; padding: 0; max-height: 160px; overflow-y: auto; }
+.docs li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 3px 0; }
+.docs label { display: flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.link { background: none; border: none; color: var(--error-text); cursor: pointer; font: inherit; font-size: 0.8rem; }
+
+/* Rendered Markdown in assistant answers */
+.md { overflow-wrap: anywhere; line-height: 1.5; }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md p { white-space: normal; margin: 0 0 8px; }
+.md h1, .md h2, .md h3, .md h4 { margin: 14px 0 6px; line-height: 1.3; }
+.md h1 { font-size: 1.2rem; }
+.md h2 { font-size: 1.1rem; }
+.md h3, .md h4 { font-size: 1rem; }
+.md ul, .md ol { margin: 0 0 8px; padding-left: 22px; }
+.md li { margin: 2px 0; }
+.md a { color: var(--accent); }
+.md code { font-family: ui-monospace, monospace; font-size: 0.88em; background: var(--bg); padding: 1px 4px; border-radius: 4px; }
+.md pre { background: var(--bg); padding: 10px; border-radius: 8px; overflow-x: auto; }
+.md pre code { padding: 0; background: none; }
+.md blockquote { margin: 0 0 8px; padding-left: 10px; border-left: 3px solid var(--border); color: var(--muted); }
+.md table { border-collapse: collapse; margin: 0 0 8px; display: block; overflow-x: auto; }
+.md th, .md td { border: 1px solid var(--border); padding: 4px 8px; }

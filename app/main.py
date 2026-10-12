@@ -24,7 +24,9 @@ set_llm_cache(InMemoryCache(maxsize=1000))
 
 app = FastAPI(
     title="AI Agent",
-    version="0.1.0"
+    version="0.1.0",
+    # /docs is the documents API; serve Swagger UI elsewhere.
+    docs_url="/swagger",
 )
 
 # ponytail: in-memory per-IP limiter, single process only; move to Redis behind a proxy.

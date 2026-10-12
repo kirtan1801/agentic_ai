@@ -1,23 +1,12 @@
 from pydantic import BaseModel, Field
 
-class ChatResult(BaseModel):
-    answer: str = Field(
-        description="The final answer to the user's question."
+class GroundCheck(BaseModel):
+    grounded: bool = Field(
+        description="True if every factual claim in the answer is supported by the context."
     )
-
-class AgentDecision(BaseModel):
-    intent: str = Field(
-        description="The user's primary intent."
-    )
-    requires_rag: bool = Field(
-        description="Whether the request requires retrieving information from the knowledge base."
-    )
-    requires_tool: bool = Field(
-        description="Whether the request requires calling an external or application tool."
-    )
-    tool_name: str | None = Field(
-        default=None,
-        description="The tool that should be called when requires_tool is true. Currently supported: web_search."
+    issue: str = Field(
+        default="",
+        description="If not grounded: which claim is unsupported, in one sentence."
     )
 
 class JudgeVerdict(BaseModel):

@@ -9,8 +9,8 @@ text_splitter = RecursiveCharacterTextSplitter(
 )
 
 
-def chunk_document(document: Document) -> list[Document]:
-    chunks = text_splitter.split_documents([document])
+def chunk_documents(documents: list[Document]) -> list[Document]:
+    chunks = text_splitter.split_documents(documents)
 
     if not chunks:
         raise ValueError("Document produced no chunks.")

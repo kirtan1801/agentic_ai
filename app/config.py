@@ -1,4 +1,9 @@
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# pydantic-settings reads .env but doesn't export it; LangChain/LangSmith read
+# LANGSMITH_* from os.environ, so load .env into the environment first.
+load_dotenv()
 
 
 class Settings(BaseSettings):
@@ -15,8 +20,15 @@ class Settings(BaseSettings):
     pinecone_index_name: str
     pinecone_namespace: str = "development"
     retrieval_min_score: float = 0.35
+    rerank_enabled: bool = True
+    rerank_model: str = "bge-reranker-v2-m3"
+    rerank_min_score: float = 0.05
 
-    max_upload_bytes: int = 2 * 1024 * 1024
+    # Agent limits: tool calls per turn, and regenerations of an ungrounded answer.
+    max_tool_calls: int = 4
+    max_answer_retries: int = 1
+
+    max_upload_bytes: int = 5 * 1024 * 1024
     rate_limit_per_minute: int = 20
 
     max_input_chars: int = 2000
@@ -27,6 +39,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        # .env also holds keys read by other libraries (e.g. LANGSMITH_*).
+        extra="ignore",
     )
 
 

@@ -2,6 +2,7 @@ import logging
 import time
 from collections import defaultdict, deque
 
+import openai
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from langchain_core.caches import InMemoryCache
@@ -47,6 +48,14 @@ async def rate_limit(request: Request, call_next):
 @app.exception_handler(GuardrailError)
 async def guardrail_error_handler(request: Request, exc: GuardrailError):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+# Moderation runs outside the route's try/except; if OpenAI is unreachable,
+# reject the request cleanly (fail closed) instead of a raw 500 traceback.
+@app.exception_handler(openai.APIError)
+async def openai_error_handler(request: Request, exc: openai.APIError):
+    logging.getLogger(__name__).error("OpenAI call failed: %s", exc)
+    return JSONResponse(status_code=503, content={"detail": "AI service is unreachable right now. Please try again."})
 
 
 @app.get("/health")

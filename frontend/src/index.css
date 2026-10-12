@@ -111,3 +111,16 @@ h1 { font-size: 1.3rem; margin: 0; }
   cursor: pointer;
 }
 .composer button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.actions { display: flex; gap: 8px; }
+.new-chat {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.new-chat:disabled { opacity: 0.5; cursor: not-allowed; }

@@ -1,62 +1,50 @@
 import logging
+from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Path
 from langchain_core.callbacks import get_usage_metadata_callback
 
+from app.agent.state import Mode
 from app.guardrails import check_input, check_output
 from app.schema.chat import ChatRequest, ChatResponse
-from app.service.chat import ChatService
 from app.service.agent import AgentService
-from app.rag.chain import answer_question
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/chat", tags=["V1"])
 
-chat_service = ChatService()
 agent_service = AgentService()
+
+
+async def run_turn(request: ChatRequest, mode: Mode) -> ChatResponse:
+    thread_id = request.thread_id or uuid4().hex
+    message = await check_input(request.message)
+    try:
+        with get_usage_metadata_callback() as usage:
+            result = await agent_service.run(thread_id, mode, message)
+        logger.info("Token usage mode=%s: %s", mode, usage.usage_metadata)
+    except Exception as exc:
+        logger.exception("Failed to process %s request", mode)
+        raise HTTPException(status_code=500, detail="Failed to process the request.") from exc
+
+    answer = await check_output(message, result["response"], result["context"])
+    await agent_service.save_answer(thread_id, answer)
+
+    return ChatResponse(response=answer, sources=result["sources"], thread_id=thread_id)
 
 
 @router.post("/", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
-    message = await check_input(request.message)
-    try:
-        with get_usage_metadata_callback() as usage:
-            response = await chat_service.chat(message)
-        logger.info("Token usage /chat: %s", usage.usage_metadata)
-    except Exception as exc:
-        logger.exception("Failed to process chat request")
-        raise HTTPException(status_code=500, detail="Failed to process the request.") from exc
+    return await run_turn(request, "chat")
 
-    return ChatResponse(response=await check_output(message, response))
-    
 @router.post("/decide", response_model=ChatResponse)
 async def decide(request: ChatRequest) -> ChatResponse:
-    message = await check_input(request.message)
-    try:
-        with get_usage_metadata_callback() as usage:
-            result = await agent_service.decide(message)
-        logger.info("Token usage /chat/decide: %s", usage.usage_metadata)
-    except Exception as exc:
-        logger.exception("Failed to process agent request")
-        raise HTTPException(status_code=500, detail="Failed to process the request.") from exc
+    return await run_turn(request, "agent")
 
-    return ChatResponse(
-        response=await check_output(message, result["response"], result["context"])
-    )
-    
 @router.post("/ask", response_model=ChatResponse)
 async def ask_question(request: ChatRequest) -> ChatResponse:
-    message = await check_input(request.message)
-    try:
-        with get_usage_metadata_callback() as usage:
-            result = await answer_question(message)
-        logger.info("Token usage /chat/ask: %s", usage.usage_metadata)
-    except Exception as exc:
-        logger.exception("Failed to process ask request")
-        raise HTTPException(status_code=500, detail="Failed to generate an answer.") from exc
+    return await run_turn(request, "ask")
 
-    return ChatResponse(
-        response=await check_output(message, result["answer"], result["context"]),
-        sources=result["sources"],
-    )
+@router.get("/{thread_id}/history")
+async def history(thread_id: str = Path(max_length=64, pattern=r"^[\w-]+$")) -> dict:
+    return {"thread_id": thread_id, "messages": await agent_service.history(thread_id)}

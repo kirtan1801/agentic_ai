@@ -31,3 +31,12 @@ Required: `LLM_PROVIDER`, `LLM_MODEL`, `LLM_API_KEY`, `TAVILY_API_KEY`, `PINECON
 Rule checks (length, prompt-injection patterns, PII redaction) always run. Retrieved docs and web results are wrapped in `<untrusted>` tags.
 
 Test: `uv run python -m tests.test_guardrails`
+
+## Conversation memory
+
+All three modes run through one LangGraph graph with a checkpointer (`InMemorySaver`, `app/agent/graph.py`), keyed by `thread_id`.
+The UI keeps the id in localStorage; "New chat" starts a new thread. `GET /chat/{thread_id}/history` returns the conversation.
+Follow-up questions are rewritten into standalone questions (`contextualize_node`) before routing/retrieval; history sent to the LLM is trimmed to ~1500 tokens.
+History is in memory only: lost on server restart.
+
+Test: `uv run python -m tests.test_memory`

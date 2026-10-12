@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 
 type Mode = { label: string; path: string; hint: string }
 
@@ -13,6 +13,25 @@ type Message = {
   text: string
   sources?: string[]
   mode?: string
+}
+
+const THREAD_KEY = 'threadId'
+
+// localStorage can throw (private mode, blocked storage): fall back to an in-memory id.
+function loadThreadId(): string {
+  try {
+    const saved = localStorage.getItem(THREAD_KEY)
+    if (saved) return saved
+  } catch {}
+  return newThreadId()
+}
+
+function newThreadId(): string {
+  const id = crypto.randomUUID()
+  try {
+    localStorage.setItem(THREAD_KEY, id)
+  } catch {}
+  return id
 }
 
 async function post(path: string, body: BodyInit, headers?: HeadersInit) {
@@ -31,6 +50,22 @@ export default function App() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [uploadStatus, setUploadStatus] = useState('')
+  const [threadId, setThreadId] = useState(loadThreadId)
+
+  // Restore the conversation after a page refresh.
+  useEffect(() => {
+    fetch(`/api/chat/${threadId}/history`)
+      .then((res) => (res.ok ? res.json() : { messages: [] }))
+      .then((data: { messages: { role: 'user' | 'assistant'; text: string }[] }) =>
+        setMessages(data.messages.map((m) => ({ role: m.role, text: m.text }))),
+      )
+      .catch(() => {})
+  }, [threadId])
+
+  function newChat() {
+    setThreadId(newThreadId())
+    setMessages([])
+  }
 
   async function send(e: FormEvent) {
     e.preventDefault()
@@ -41,7 +76,7 @@ export default function App() {
     setMessages((m) => [...m, { role: 'user', text, mode: mode.label }])
     setLoading(true)
     try {
-      const data = await post(mode.path, JSON.stringify({ message: text }), {
+      const data = await post(mode.path, JSON.stringify({ message: text, thread_id: threadId }), {
         'Content-Type': 'application/json',
       })
       setMessages((m) => [...m, { role: 'assistant', text: data.response, sources: data.sources }])
@@ -69,17 +104,22 @@ export default function App() {
     <div className="app">
       <header>
         <h1>AI Agent</h1>
-        <label className="upload">
-          Upload doc
-          <input
-            type="file"
-            accept=".md,.txt,.html"
-            onChange={(e) => {
-              upload(e.target.files?.[0])
-              e.target.value = ''
-            }}
-          />
-        </label>
+        <div className="actions">
+          <button type="button" className="new-chat" onClick={newChat} disabled={loading}>
+            New chat
+          </button>
+          <label className="upload">
+            Upload doc
+            <input
+              type="file"
+              accept=".md,.txt,.html"
+              onChange={(e) => {
+                upload(e.target.files?.[0])
+                e.target.value = ''
+              }}
+            />
+          </label>
+        </div>
       </header>
       {uploadStatus && <p className="status" role="status">{uploadStatus}</p>}
 

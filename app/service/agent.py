@@ -3,13 +3,18 @@ from collections.abc import AsyncIterator
 
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
+from langsmith import tracing_context
 
 from app.agent.state import AgentState, Mode
 from app.agent.graph import RECURSION_LIMIT, graph
 
 logger = logging.getLogger(__name__)
 
-TOOL_LABELS = {"search_documents": "Searching documents", "web_search": "Searching the web"}
+TOOL_LABELS = {
+    "search_documents": "Searching documents",
+    "web_search": "Searching the web",
+    "remember": "Saving to memory",
+}
 
 
 def _config(thread_id: str, mode: Mode | None = None) -> dict:
@@ -25,7 +30,7 @@ def _config(thread_id: str, mode: Mode | None = None) -> dict:
     return config
 
 
-def _input(mode: Mode, message: str, sources: list[str] | None) -> AgentState:
+def _input(mode: Mode, message: str, sources: list[str] | None, user_id: str | None) -> AgentState:
     # Per-turn fields are reset explicitly so the previous turn's values don't leak in.
     return {
         'messages': [HumanMessage(message)],
@@ -33,6 +38,7 @@ def _input(mode: Mode, message: str, sources: list[str] | None) -> AgentState:
         'mode': mode,
         'message': message,
         'sources_filter': sources,
+        'user_id': user_id,
         'response': None,
         'context': None,
         'sources': None,
@@ -55,15 +61,17 @@ def _result(values: dict) -> dict:
 
 
 class AgentService:
-    async def run(self, thread_id: str, mode: Mode, message: str, sources: list[str] | None = None) -> dict:
+    async def run(
+        self, thread_id: str, mode: Mode, message: str, sources: list[str] | None = None, user_id: str | None = None
+    ) -> dict:
         """Run one turn of the conversation. Returns the response, citations and grounding context."""
         logger.info("Agent request received: thread=%s mode=%s", thread_id, mode)
-        result = await graph.ainvoke(_input(mode, message, sources), _config(thread_id, mode))
+        result = await graph.ainvoke(_input(mode, message, sources, user_id), _config(thread_id, mode))
         logger.info("Agent graph completed")
         return _result(result)
 
     async def stream(
-        self, thread_id: str, mode: Mode, message: str, sources: list[str] | None = None
+        self, thread_id: str, mode: Mode, message: str, sources: list[str] | None = None, user_id: str | None = None
     ) -> AsyncIterator[tuple[str, object]]:
         """Yield (event, data): status / token / reset while running, then ("final", result)."""
         logger.info("Agent stream received: thread=%s mode=%s", thread_id, mode)
@@ -71,7 +79,7 @@ class AgentService:
             yield "status", "Searching documents"
 
         async for kind, data in graph.astream(
-            _input(mode, message, sources),
+            _input(mode, message, sources, user_id),
             _config(thread_id, mode),
             stream_mode=["messages", "updates"],
         ):
@@ -95,9 +103,18 @@ class AgentService:
         snapshot = await graph.aget_state(_config(thread_id))
         yield "final", _result(snapshot.values)
 
-    async def save_answer(self, thread_id: str, answer: str) -> None:
+    async def tokens_used(self, thread_id: str) -> int:
+        snapshot = await graph.aget_state(_config(thread_id))
+        return snapshot.values.get("tokens_used", 0)
+
+    async def save_answer(self, thread_id: str, answer: str, tokens: int = 0) -> None:
         # Called after output guardrails, so blocked answers never enter the history.
-        await graph.aupdate_state(_config(thread_id), {"messages": [AIMessage(answer)]})
+        # Untraced: it would show up in LangSmith as a separate "LangGraphUpdateState" turn
+        # in the thread; the answer is already in the chat-<mode> run's output.
+        with tracing_context(enabled=False):
+            await graph.aupdate_state(
+                _config(thread_id), {"messages": [AIMessage(answer)], "tokens_used": tokens}
+            )
 
     async def history(self, thread_id: str) -> list[dict]:
         snapshot = await graph.aget_state(_config(thread_id))

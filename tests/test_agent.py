@@ -4,6 +4,7 @@ import os
 
 os.environ["GUARD_MODERATION"] = "false"  # no network calls
 os.environ["LANGSMITH_TRACING"] = "false"  # don't send test traces
+os.environ["CHECKPOINT_DB"] = ":memory:"  # isolated, throwaway history
 
 import asyncio
 import json
@@ -51,7 +52,7 @@ tools.read_document_chunks = fake_read_chunks
 
 async def fake_tavily(_):
     calls["web"] += 1
-    return {"results": ["web fact"]}
+    return {"results": [{"title": "Web", "url": "https://example.com", "content": "web fact"}]}
 
 web.tavily_search = SimpleNamespace(ainvoke=fake_tavily)
 
@@ -91,8 +92,9 @@ def sse_events(text: str) -> list[tuple[str, object]]:
 
 
 def test_agent_limits_and_stream() -> None:
-    client = TestClient(app)
-    res = client.post("/chat/stream", json={"message": "compare docs and web", "mode": "agent"})
+    with TestClient(app) as client:
+        res = client.post("/chat/stream", json={"message": "compare docs and web", "mode": "agent"})
+        history = client.get(f"/chat/{sse_events(res.text)[-1][1]['thread_id']}/history").json()["messages"]
     events = sse_events(res.text)
     names = [e for e, _ in events]
 
@@ -113,7 +115,6 @@ def test_agent_limits_and_stream() -> None:
     assert [c["n"] for c in done[1]["sources"]] == [1, 2]
 
     # Tool calls stay out of the saved conversation.
-    history = client.get(f"/chat/{done[1]['thread_id']}/history").json()["messages"]
     assert history == [
         {"role": "user", "text": "compare docs and web"},
         {"role": "assistant", "text": "final answer [1]"},
@@ -122,7 +123,8 @@ def test_agent_limits_and_stream() -> None:
 
 def test_ask_retry_bounded() -> None:
     calls["ground"] = calls["rag"] = 0
-    body = TestClient(app).post("/chat/ask", json={"message": "what is x?"}).json()
+    with TestClient(app) as client:
+        body = client.post("/chat/ask", json={"message": "what is x?"}).json()
     assert calls["rag"] == 1 + settings.max_answer_retries and calls["ground"] == settings.max_answer_retries
     assert body["sources"][0] == {"n": 1, "source": "a.pdf", "page": 2, "snippet": "fact about what is x?"}
 
@@ -178,9 +180,39 @@ def test_pdf_and_ids() -> None:
         raise AssertionError("bad PDF should be rejected")
 
 
+def test_upstream_failures() -> None:
+    import app.ai.llm as llm_module
+
+    # Web search down: the model gets a plain message instead of an exception.
+    async def broken_tavily(_):
+        raise ConnectionError("tavily down")
+
+    working, web.tavily_search = web.tavily_search, SimpleNamespace(ainvoke=broken_tavily)
+    try:
+        assert "unavailable" in asyncio.run(web.web_search.ainvoke({"query": "q"}))
+    finally:
+        web.tavily_search = working
+
+    # Main model failing: the fallback model answers.
+    def down(_):
+        raise ConnectionError("model down")
+
+    primary = RunnableLambda(down)
+    real_model, real_setting = llm_module._model, settings.llm_fallback_model
+    llm_module._model = lambda model, max_tokens: RunnableLambda(lambda _: f"from {model}")
+    settings.llm_fallback_model = "backup-model"
+    try:
+        assert llm_module._with_fallback(primary, 10).invoke("hi") == "from backup-model"
+        settings.llm_fallback_model = None
+        assert llm_module._with_fallback(primary, 10) is primary
+    finally:
+        llm_module._model, settings.llm_fallback_model = real_model, real_setting
+
+
 if __name__ == "__main__":
     test_agent_limits_and_stream()
     test_ask_retry_bounded()
     test_read_document_tool()
     test_pdf_and_ids()
+    test_upstream_failures()
     print("ok")

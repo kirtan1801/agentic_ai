@@ -1,9 +1,11 @@
 from typing import Annotated
+from uuid import uuid4
 
 from langchain_core.documents import Document
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import tool
-from langgraph.prebuilt import InjectedState
+from langgraph.prebuilt import InjectedState, InjectedStore
+from langgraph.store.base import BaseStore
 
 from app.rag.ingestion import read_document as read_document_chunks
 from app.rag.retriever import citations, format_context, retrieve_docs
@@ -49,4 +51,16 @@ async def read_document(source: str, state: Annotated[dict, InjectedState]) -> t
     return _cited(documents, state)
 
 
-TOOLS = [search_documents, read_document, web_search]
+@tool
+async def remember(
+    fact: str, state: Annotated[dict, InjectedState], store: Annotated[BaseStore, InjectedStore()]
+) -> str:
+    """Save one short, lasting fact about the user (name, preferences, goals) so it is known in future chats."""
+    if not state.get("user_id"):
+        return "Can't save: this chat has no user id."
+    # ponytail: no dedupe or editing of facts; add when the 20-fact prompt cap starts to bite.
+    await store.aput(("memories", state["user_id"]), uuid4().hex, {"fact": fact})
+    return "Saved."
+
+
+TOOLS = [search_documents, read_document, web_search, remember]

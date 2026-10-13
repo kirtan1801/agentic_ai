@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     # Cheap model for routing decisions and guardrail checks; defaults to llm_model.
     llm_router_model: str | None = None
     llm_max_tokens: int = 3000
+    # Backup model (same provider and key) used when a call to the main model fails.
+    llm_fallback_model: str | None = None
+    # Seconds before an upstream call is abandoned. The OpenAI client retries twice on top.
+    llm_timeout: float = 30
+    tool_timeout: float = 15
 
     tavily_api_key: str
 
@@ -27,6 +32,12 @@ class Settings(BaseSettings):
     # Agent limits: tool calls per turn, and regenerations of an ungrounded answer.
     max_tool_calls: int = 4
     max_answer_retries: int = 1
+
+    # Chat history (checkpoints) and long-term memory; ":memory:" in tests.
+    checkpoint_db: str = "data/agent.sqlite"
+
+    # Tokens one conversation may spend before the user must start a new chat.
+    max_thread_tokens: int = 100_000
 
     max_upload_bytes: int = 5 * 1024 * 1024
     rate_limit_per_minute: int = 20

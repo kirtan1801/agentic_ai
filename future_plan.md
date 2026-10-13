@@ -11,11 +11,12 @@ Work deferred from the current iteration, in suggested order. Each item lists wh
 
 ## 2. Memory & cost
 
-- **Persistent history**: replace `InMemorySaver` in `app/agent/graph.py` with `SqliteSaver` (`uv add langgraph-checkpoint-sqlite`) for a single machine, or `PostgresSaver` (`langgraph-checkpoint-postgres`) for multiple workers. Add a TTL / cleanup job for old threads.
-- **Summarize long chats**: instead of only trimming (`recent_history` in `app/agent/node.py`), keep a running summary of older turns in state and prepend it.
-- **Long-term memory**: LangGraph `Store` for facts about the user that survive across threads (name, preferences), written by a small "remember" tool.
-- **Token budget**: track tokens per thread (from `get_usage_metadata_callback` in `app/api/routes/chat.py`) and refuse or downgrade the model past a limit.
-- **Shared cache**: move `InMemoryCache` (`app/main.py`) to Redis/SQLite so it survives restarts and is shared by workers; consider a semantic cache once exact-match hit rate is measured.
+Done: SQLite history (`data/agent.sqlite`, attached in the `app/main.py` lifespan), running summary of older turns (`summarize_node`), long-term memory per browser `user_id` (`remember` tool + SQLite `Store`), per-thread token budget (`MAX_THREAD_TOKENS`, 429 past it).
+
+- **Thread cleanup**: old threads are never evicted; add a job using `checkpointer.adelete_thread` once auth gives threads an owner.
+- **Multiple workers**: SQLite is single-machine; switch to `PostgresSaver` / `PostgresStore` (`langgraph-checkpoint-postgres`).
+- **Memory dedupe**: facts are only appended; merge or edit them when the 20-fact prompt cap starts to bite.
+- **Shared cache**: skipped for now. `InMemoryCache` only hits byte-identical prompts, and chat prompts include history, so hits are rare. Measure the hit rate in LangSmith first; then Redis/SQLite or a semantic cache.
 
 ## 3. Before real users
 

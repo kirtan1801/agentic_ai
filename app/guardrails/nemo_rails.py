@@ -5,14 +5,14 @@ from pathlib import Path
 from nemoguardrails import LLMRails, RailsConfig
 from nemoguardrails.rails.llm.options import RailStatus, RailType
 
-from app.ai.llm import router_llm
+from app.ai.llm import router_chat_model
 
 CONFIG_DIR = Path(__file__).parent / "nemo"
 
 
 @cache
 def _rails() -> LLMRails:
-    return LLMRails(RailsConfig.from_path(str(CONFIG_DIR)), llm=router_llm)
+    return LLMRails(RailsConfig.from_path(str(CONFIG_DIR)), llm=router_chat_model)
 
 
 async def nemo_blocks_input(message: str) -> bool:

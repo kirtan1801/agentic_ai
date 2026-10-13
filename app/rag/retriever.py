@@ -41,15 +41,20 @@ async def retrieve_docs(
         raise ValueError("k must be greater then zero.")
 
     search_filter = {"source": {"$in": sources}} if sources else None
-    result = await vector_store.asimilarity_search_with_score(
-        query, k=CANDIDATES if settings.rerank_enabled else k, filter=search_filter
+    result = await asyncio.wait_for(
+        vector_store.asimilarity_search_with_score(
+            query, k=CANDIDATES if settings.rerank_enabled else k, filter=search_filter
+        ),
+        settings.tool_timeout,
     )
 
     if settings.rerank_enabled and result:
         try:
             # Rerank score doubles as the relevance grade: weak chunks are dropped,
             # so callers can fall back (e.g. to web search) without an extra LLM call.
-            return await asyncio.to_thread(_rerank, query, [doc for doc, _ in result], k)
+            return await asyncio.wait_for(
+                asyncio.to_thread(_rerank, query, [doc for doc, _ in result], k), settings.tool_timeout
+            )
         except Exception:
             logger.warning("Rerank failed; falling back to vector scores", exc_info=True)
 

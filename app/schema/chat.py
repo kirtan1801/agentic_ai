@@ -7,6 +7,9 @@ THREAD_ID = Field(default=None, max_length=64, pattern=r"^[\w-]+$")
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1)
     thread_id: str | None = THREAD_ID
+    # Browser-generated id for long-term memory across chats. ponytail: not authenticated;
+    # anyone with the id reads its facts. Replace with the auth user id.
+    user_id: str | None = THREAD_ID
     # Restrict document search to these uploaded files (None = all).
     sources: list[str] | None = Field(default=None, max_length=50)
 

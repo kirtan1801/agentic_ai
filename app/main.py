@@ -1,13 +1,18 @@
 import logging
+import os
 import time
 from collections import defaultdict, deque
+from contextlib import asynccontextmanager
 
 import openai
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from langchain_core.caches import InMemoryCache
 from langchain_core.globals import set_llm_cache
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from langgraph.store.sqlite.aio import AsyncSqliteStore
 
+from app.agent.graph import graph
 from app.api.routes.chat import router as chat_router
 from app.api.routes.docs import router as docs_router
 from app.config import settings
@@ -22,7 +27,24 @@ logging.basicConfig(
 # ponytail: per-process cache, swap to SQLiteCache/Redis when running multiple workers.
 set_llm_cache(InMemoryCache(maxsize=1000))
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Chat history in SQLite, so it survives restarts. ponytail: threads are never
+    # evicted (add a cleanup job with auth); single machine only, PostgresSaver for several.
+    if settings.checkpoint_db != ":memory:":
+        os.makedirs(os.path.dirname(settings.checkpoint_db) or ".", exist_ok=True)
+    # Long-term memory (remember tool) lives in the same file, in its own connection.
+    async with (
+        AsyncSqliteSaver.from_conn_string(settings.checkpoint_db) as checkpointer,
+        AsyncSqliteStore.from_conn_string(settings.checkpoint_db) as store,
+    ):
+        graph.checkpointer = checkpointer
+        graph.store = store
+        yield
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="AI Agent",
     version="0.1.0",
     # /docs is the documents API; serve Swagger UI elsewhere.

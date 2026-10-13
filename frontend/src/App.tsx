@@ -53,6 +53,23 @@ function newThreadId(): string {
   return id
 }
 
+// Stable per-browser id for long-term memory across chats (unlike threadId, never reset).
+const USER_KEY = 'userId'
+
+function loadUserId(): string {
+  try {
+    const saved = localStorage.getItem(USER_KEY)
+    if (saved) return saved
+    const id = crypto.randomUUID()
+    localStorage.setItem(USER_KEY, id)
+    return id
+  } catch {
+    return crypto.randomUUID()
+  }
+}
+
+const userId = loadUserId()
+
 async function request(path: string, init?: RequestInit) {
   const res = await fetch(`/api${path}`, init)
   const data = await res.json().catch(() => ({}))
@@ -146,6 +163,7 @@ export default function App() {
         body: JSON.stringify({
           message: text,
           thread_id: threadId,
+          user_id: userId,
           mode: mode.id,
           sources: selected.length ? selected : null,
         }),

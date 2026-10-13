@@ -14,6 +14,7 @@ TOOL_LABELS = {
     "search_documents": "Searching documents",
     "web_search": "Searching the web",
     "remember": "Saving to memory",
+    "database_stats": "Checking database size",
 }
 
 
@@ -94,8 +95,9 @@ class AgentService:
                     for call in getattr(update["scratch"][-1], "tool_calls", None) or []:
                         # Text streamed before a tool call is thinking-out-loud: clear it.
                         yield "reset", None
-                        query = call["args"].get("query", "")
-                        yield "status", f"{TOOL_LABELS.get(call['name'], call['name'])}: {query}"
+                        label = TOOL_LABELS.get(call["name"], call["name"])
+                        query = call["args"].get("query")
+                        yield "status", f"{label}: {query}" if query else label
                 elif node == "ground_check" and update and update.get("retry"):
                     yield "reset", None
                     yield "status", "Improving answer (not fully supported by sources)"

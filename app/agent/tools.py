@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from typing import Annotated
 from uuid import uuid4
 
@@ -7,9 +9,13 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState, InjectedStore
 from langgraph.store.base import BaseStore
 
-from app.rag.ingestion import read_document as read_document_chunks
+from app.config import settings
+from app.rag.ingestion import list_documents, read_document as read_document_chunks
 from app.rag.retriever import citations, format_context, retrieve_docs
 from app.tools.web_search import web_search
+from app.vector_store.pinecone import get_index
+
+logger = logging.getLogger(__name__)
 
 DOCUMENT_TOOLS = {"search_documents", "read_document"}
 READ_MAX_CHUNKS = 8  # ~8k characters per read, keeps prompt cost bounded
@@ -63,4 +69,31 @@ async def remember(
     return "Saved."
 
 
-TOOLS = [search_documents, read_document, web_search, remember]
+async def _database_stats() -> str:
+    stats = await asyncio.to_thread(lambda: get_index().describe_index_stats())
+    documents = await list_documents()
+    namespaces = ", ".join(f"{name}: {ns.vector_count}" for name, ns in (stats.namespaces or {}).items())
+    # ponytail: serverless Pinecone reports no byte size; estimate from float32 vectors.
+    vector_mb = stats.total_vector_count * stats.dimension * 4 / 1_000_000
+    lines = [
+        f"Index: {settings.pinecone_index_name} (dimension {stats.dimension})",
+        f"Total vectors (chunks): {stats.total_vector_count}; per namespace: {namespaces or 'none'}",
+        f"Estimated vector storage: ~{vector_mb:.2f} MB (float32 vectors only; chunk text and metadata not included)",
+        f"Documents in namespace '{settings.pinecone_namespace}': {len(documents)}",
+        *(f"- {doc['source']}: {doc['chunks']} chunks" for doc in documents),
+    ]
+    return "\n".join(lines)
+
+
+@tool
+async def database_stats() -> str:
+    """Size and contents of the document database (Pinecone): vector count, dimension, namespaces,
+    and each document with its chunk count. Use for questions about how much data is stored."""
+    try:
+        return await asyncio.wait_for(_database_stats(), settings.tool_timeout)
+    except Exception:
+        logger.warning("Database stats failed", exc_info=True)
+        return "Database stats are unavailable right now."
+
+
+TOOLS = [search_documents, read_document, web_search, remember, database_stats]

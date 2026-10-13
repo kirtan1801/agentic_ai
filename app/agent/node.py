@@ -19,11 +19,12 @@ HISTORY_MAX_TOKENS = 1500
 # Fold messages that fell out of the window into the summary in batches, not every turn.
 SUMMARY_BATCH = 6
 
-AGENT_PROMPT = """You are a helpful assistant with four tools:
+AGENT_PROMPT = """You are a helpful assistant with five tools:
 - search_documents: find specific facts in the user's uploaded documents. Try it first when the question may be covered by them.
 - read_document: read one uploaded document from the start. Use it for summaries and "what is this about" questions.
 - web_search: current or public information. Use it when the documents don't cover the question or it needs fresh facts.
 - remember: save a NEW lasting fact the user shares about themselves (name, preferences, goals) for future chats. Never re-save known facts.
+- database_stats: size and contents of the document database (vectors, documents, chunks). Use for storage/size questions.
 Call one tool at a time, and stop calling tools once you have enough to answer.
 If the question needs no lookup (greetings, general knowledge, chit-chat), answer directly.
 When answering from web_search, list only sources that appear in its results; never add links or titles from memory. Need more sources? Search again.

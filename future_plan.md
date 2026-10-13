@@ -32,4 +32,3 @@ Done: SQLite history (`data/agent.sqlite`, attached in the `app/main.py` lifespa
 - **Hybrid (keyword + vector) search**: the current Pinecone index is `cosine`/dense-only. Needs a new index with `dotproduct` metric and sparse vectors (e.g. BM25 encoder), then re-ingest all documents.
 - **Evaluations**: build a LangSmith dataset of 20–30 questions with expected routes/answers; run `langsmith.evaluate` with correctness + groundedness evaluators after each change.
 - **OCR for scanned PDFs**: `app/rag/loader.py` rejects PDFs with no text layer; add OCR (e.g. `pytesseract` + `pdf2image`, needs system packages) behind a flag.
-- **Dependency cleanup**: the stray `pinecone-client` 3.2.2 package in `.venv` is required by nothing and can conflict with `pinecone` 7.x; remove it.

@@ -209,10 +209,33 @@ def test_upstream_failures() -> None:
         llm_module._model, settings.llm_fallback_model = real_model, real_setting
 
 
+def test_database_stats() -> None:
+    stats = SimpleNamespace(
+        dimension=512, total_vector_count=10,
+        namespaces={"development": SimpleNamespace(vector_count=7), "other": SimpleNamespace(vector_count=3)},
+    )
+    real_index, real_list = tools.get_index, tools.list_documents
+    tools.list_documents = fake_list_documents
+    try:
+        tools.get_index = lambda: SimpleNamespace(describe_index_stats=lambda: stats)
+        out = asyncio.run(tools.database_stats.ainvoke({}))
+        assert "Total vectors (chunks): 10" in out and "dimension 512" in out, out
+        assert "development: 7, other: 3" in out and "- a.pdf: 3 chunks" in out, out
+        assert "~0.02 MB" in out, out
+
+        def down():
+            raise ConnectionError("pinecone down")
+        tools.get_index = lambda: SimpleNamespace(describe_index_stats=down)
+        assert "unavailable" in asyncio.run(tools.database_stats.ainvoke({}))
+    finally:
+        tools.get_index, tools.list_documents = real_index, real_list
+
+
 if __name__ == "__main__":
     test_agent_limits_and_stream()
     test_ask_retry_bounded()
     test_read_document_tool()
     test_pdf_and_ids()
     test_upstream_failures()
+    test_database_stats()
     print("ok")
